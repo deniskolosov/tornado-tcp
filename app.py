@@ -1,5 +1,6 @@
 import socket
 import os
+import json
 
 import tornado.gen
 import tornado.ioloop
@@ -21,7 +22,6 @@ class MessageBuffer(object):
         self.waiters.remove(callback)
 
     def new_messages(self, messages):
-        print("Sending new message to %r listeners" % len(self.waiters))
         for callback in self.waiters:
             callback(messages)
         self.waiters = set()
@@ -39,6 +39,7 @@ class SimpleTcpClient(object):
         super().__init__()
         SimpleTcpClient.client_id += 1
         self.id = SimpleTcpClient.client_id
+        self.connections = []
         self.stream = stream
 
         self.stream.socket.setsockopt(
@@ -51,34 +52,29 @@ class SimpleTcpClient(object):
 
     @tornado.gen.coroutine
     def on_disconnect(self):
-        self.log('disconnected')
+        print('disconnected')
         yield []
 
     @tornado.gen.coroutine
-    def dispatch_client(self):
+    def dispatch_client(self, client_name):
         try:
             while True:
                 data = yield self.stream.read_until_regex(b'End\r\n')
-                print(data.decode('utf-8'))
                 if 'Auth::' in data.decode('utf-8'):
-                    messages_buffer.new_messages([data])
+                    messages_buffer.new_messages([data, self.connections])
                     yield self.stream.write(data)
         except tornado.iostream.StreamClosedError:
-            pass
+            self.connections.remove(client_name)
 
     @tornado.gen.coroutine
     def on_connect(self):
-        raddr = 'closed'
         try:
-            raddr = '%s:%d' % self.stream.socket.getpeername()
+            name = self.stream.socket.getpeername()
+            self.connections.append(name)
         except Exception:
             pass
-        self.log('new, %s' % raddr)
 
-        yield self.dispatch_client()
-
-    def log(self, msg, *args, **kwargs):
-        print('[connection %d] %s' % (self.id, msg.format(*args, **kwargs)))
+        yield self.dispatch_client(name)
 
 
 class SimpleTcpServer(tornado.tcpserver.TCPServer):
@@ -103,7 +99,11 @@ class MessageUpdatesHandler(tornado.web.RequestHandler):
         if self.request.connection.stream.closed():
             return
         lines = messages[0].decode('utf-8').split('\r\n')
-        self.write(dict(lines=lines))
+        connections = messages[1]
+        resp = {l.split(':: ')[0]:l.split(':: ')[1]
+                for l in lines if l != 'End' and  l != ''}
+        resp['current_connections'] = connections
+        self.write(resp)
         self.finish()
 
     def on_connection_close(self):
@@ -116,7 +116,7 @@ def main():
 
     server = SimpleTcpServer()
     server.listen(port, host)
-    print("Listening on %s:%d..." % (host, port))
+    print("Listening to tcp messages on %s:%d..." % (host, port))
 
     app = tornado.web.Application(
         [
@@ -127,6 +127,7 @@ def main():
         static_path=os.path.join(os.path.dirname(__file__), "static"),
     )
     app.listen(8100)
+    print("HTTP server started at port :8100")
 
     tornado.ioloop.IOLoop.instance().start()
 

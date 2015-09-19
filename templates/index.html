@@ -3,15 +3,19 @@
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/> 
 <title>Incoming messages</title>
-<link rel="stylesheet" href="{{ static_url("chat.css")  }}" type="text/css"/>
+<link rel="stylesheet" href="{{ static_url("bootstrap.min.css")  }}" type="text/css"/>
 </head>
 <body>
-<div id="body">
-	<div id="msg">
-
-	</div>
-</div>
-<script src="https://code.jquery.com/jquery-2.1.4.min.js" type="text/javascript"></script>
-<script src="{{ static_url("chat.js")  }}" type="text/javascript"></script>
+    <div id="container">
+        <div class="row">
+            <div class="col-md-4">Соединения в данный момент:<br>
+                <div id="conns"></div>
+            </div>
+            <div class="col-md-4" id="msg"></div>
+        </div>
+    </div>
+    </div>
+<script src="{{ static_url("jquery-2.1.4.min.js") }} type="text/javascript"></script>
+<script src="{{ static_url("messages.js")  }}" type="text/javascript"></script>
 </body>
 </html>
